@@ -7,7 +7,21 @@ const emailSchema = z.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Informe um e
 export const getTodayDateSchema = z.object({}).describe('Sem parâmetros.');
 
 export const listEventsSchema = z.object({
-  date: dateSchema.describe('Dia consultado, no formato AAAA-MM-DD.'),
+  date: dateSchema
+    .optional()
+    .describe(
+      'Um único dia, AAAA-MM-DD. Use somente quando a pessoa pedir um dia. Não envie date junto com timeMin ou timeMax.',
+    ),
+  timeMin: dateSchema
+    .optional()
+    .describe(
+      'Primeiro dia do intervalo, inclusive, AAAA-MM-DD. Para os próximos 7 dias a partir de 2026-05-01, use 2026-05-01. Envie junto com timeMax, numa única chamada.',
+    ),
+  timeMax: dateSchema
+    .optional()
+    .describe(
+      'Último dia do intervalo, inclusive, AAAA-MM-DD. Para os próximos 7 dias a partir de 2026-05-01, use 2026-05-07. Não é o dia seguinte e não gera uma chamada por dia.',
+    ),
 });
 
 export const createEventSchema = z.object({

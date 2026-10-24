@@ -11,8 +11,13 @@ export interface CalendarEvent {
   link?: string;
 }
 
+export interface CalendarList {
+  events: CalendarEvent[];
+  truncated: boolean;
+}
+
 export interface CalendarGateway {
-  listEvents(input: { date: string; timeZone: string }): Promise<CalendarEvent[]>;
+  listEvents(input: { startDate: string; endDate: string; timeZone: string }): Promise<CalendarList>;
   createEvent(input: {
     title: string;
     date: string;
