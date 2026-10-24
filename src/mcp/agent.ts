@@ -7,6 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { loadConfig, requireGeminiApiKey } from '../config.js';
 import { ReportedChatError, runChat } from '../agent/chat.js';
+import { armForcedExit, writeFailure } from '../agent/failure.js';
 import { createGeminiClient, generateContentWithRetry } from '../agent/gemini.js';
 import { recordModelTurn, textFromContent } from '../agent/messages.js';
 import { SYSTEM_PROMPT } from '../agent/prompt.js';
@@ -81,16 +82,36 @@ async function main(): Promise<void> {
         return textFromContent(response.candidates?.[0]?.content) || 'Não consegui formular uma resposta.';
       },
     });
+  } catch (error) {
+    armForcedExit(1);
+    throw error;
   } finally {
-    await client.close();
+    const childPid = transport.pid;
+    await client.close().catch(() => undefined);
+    stopChild(childPid);
+  }
+}
+
+function stopChild(pid: number | null): void {
+  if (pid === null) return;
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return;
+  }
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // The child already exited.
   }
 }
 
 const isEntry = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isEntry) {
   main().catch((error: unknown) => {
+    armForcedExit(1);
     if (!(error instanceof ReportedChatError)) {
-      console.error(error instanceof Error ? error.message : error);
+      writeFailure(error instanceof Error ? error.message : 'Falha ao consultar o modelo.');
     }
     process.exit(1);
   });

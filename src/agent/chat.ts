@@ -1,3 +1,4 @@
+import { writeSync } from 'node:fs';
 import readline from 'node:readline/promises';
 import { Readable, Writable } from 'node:stream';
 import { stdin, stdout, stderr } from 'node:process';
@@ -127,5 +128,14 @@ function errorText(error: unknown): string {
 }
 
 function writeLine(stream: Writable, line: string): void {
-  stream.write(`${line}\n`);
+  const text = `${line}\n`;
+  if (stream === stdout || stream === stderr) {
+    try {
+      writeSync(stream === stdout ? 1 : 2, text);
+      return;
+    } catch {
+      // The pipe can already be closed. Fall through to the stream write.
+    }
+  }
+  stream.write(text);
 }

@@ -99,7 +99,7 @@ Não vincule um cartão. Calendar API e Gmail API funcionam no projeto pessoal d
 
 O modelo padrão é `gemini-3.8-flash`. O id antigo `gemini-2.5-flash` responde 404 para contas novas. Se o Google aposentar o id atual, troque `GEMINI_MODEL` por outro Flash ainda listado como gratuito no AI Studio.
 
-Quando a API responde 429 ou 503 (alta demanda), a chamada é repetida algumas vezes, com espera de 1s, 2s e 4s. O terminal mostra cada nova tentativa. Se ainda falhar e `GEMINI_FALLBACK_MODEL` estiver definido, a mesma sequência roda nesse modelo reserva. Outros erros, como um modelo inexistente, param na hora.
+Quando a API responde 503, ou um 429 de pico (muitas chamadas em pouco tempo), a chamada é repetida até 4 vezes, com espera de 1s, 2s e 4s. O terminal mostra cada nova tentativa. Se ainda falhar e `GEMINI_FALLBACK_MODEL` estiver definido, a mesma sequência roda nesse modelo reserva. Um 429 de cota diária (`RESOURCE_EXHAUSTED` ou "quota exceeded") não entra nessa espera: o processo imprime que a cota acabou e para. Cada chamada espera no máximo 60s (`GEMINI_HTTP_TIMEOUT_MS`). Se o tempo estourar, ou se as tentativas acabarem, o erro sai no stderr e o processo termina com código 1. No modo MCP, o processo filho do servidor é encerrado junto. Outros erros, como um modelo inexistente, param na hora.
 
 ## 2. Projeto Google Cloud sem billing
 
@@ -170,7 +170,7 @@ npm run dev:mcp
 
 Para encerrar, escreva `sair` ou use Ctrl+C.
 
-Também dá para mandar uma mensagem sem abrir o chat. O programa lê o stdin até o fim, responde e encerra. Se a chamada falhar, o erro sai no stderr e o processo termina com código de erro, em vez de ficar esperando outro prompt.
+Também dá para mandar uma mensagem sem abrir o chat. O programa lê o stdin até o fim, responde e encerra. Se a chamada falhar (cota diária, tempo esgotado ou 503 depois das tentativas), o erro sai no stderr e o processo termina com código 1. `npm run dev:mcp` também encerra o servidor MCP filho. O programa não fica esperando outro prompt.
 
 ```bash
 echo 'Que dia é hoje?' | npm run dev
@@ -270,7 +270,8 @@ O stderr mostra `MCP HTTP ouvindo em 127.0.0.1:3333/mcp`. `GET http://127.0.0.1:
    - Authentication: Bearer Auth
    - Tools to Include: All
 6. Os ids de credencial no JSON são marcadores. Depois de importar, o n8n pede para escolher as credenciais reais. Faça isso nos dois nós.
-7. Abra o chat do nó **When chat message received** e pergunte pelos próximos 7 dias. O agente deve chamar `getTodayDate` uma vez e `listEvents` uma vez, com `timeMin` e `timeMax`.
+7. O gatilho de chat do exemplo vem com `public: true` (Make Chat Publicly Available). Assim a página hospedada do chat abre, e não fica só no modo manual do editor. Se quiser restringir o chat ao editor, desligue essa opção no nó.
+8. Abra o chat e pergunte pelos próximos 7 dias. O agente deve chamar `getTodayDate` uma vez e `listEvents` uma vez, com `timeMin` e `timeMax`.
 
 O nó do agente já traz o mesmo recado do prompt local: um intervalo é uma chamada só. As descrições das ferramentas vêm do servidor, iguais às do `npm run dev`.
 
@@ -326,7 +327,7 @@ Os testes cobrem o loop (resposta direta, uma chamada, chamadas encadeadas, vár
 
 ## Limites e segurança
 
-- A cota gratuita do Gemini é finita. Um 429 ou 503 dispara novas tentativas e, se você configurou, o modelo reserva. Se a cota acabar de vez, a chamada falha. Não cadastre cartão por causa disso.
+- A cota gratuita do Gemini é finita. Um 503, ou um 429 de pico, dispara novas tentativas e, se você configurou, o modelo reserva. Cota diária esgotada (`RESOURCE_EXHAUSTED`) para na hora, com uma mensagem no stderr e saída com erro. Não cadastre cartão por causa disso.
 - O token e o JSON do cliente OAuth autorizam sua agenda. Não os commite e não os cole no chat.
 - `createEvent` e `updateEvent` não mandam convite do Calendar. O aviso a convidados é uma ação separada, e no dry-run ela só aparece no terminal.
 - O aplicativo OAuth fica em modo de teste, restrito aos usuários que você cadastrou.

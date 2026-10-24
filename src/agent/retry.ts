@@ -30,9 +30,53 @@ export function modelSequence(model: string, fallbackModel?: string): string[] {
 }
 
 export function retryableStatus(error: unknown): 429 | 503 | undefined {
+  if (isDailyQuotaError(error) || isTimeoutError(error)) return undefined;
   const status = readStatus(error);
   if (status === 429 || status === 503) return status;
   return undefined;
+}
+
+export function isDailyQuotaError(error: unknown): boolean {
+  const blob = errorBlob(error);
+  const quota =
+    /RESOURCE_EXHAUSTED/.test(blob) ||
+    /quota exceeded/i.test(blob) ||
+    /exceeded your current quota/i.test(blob);
+  if (!quota) return false;
+  const status = readStatus(error);
+  return status === undefined || status === 429;
+}
+
+export function isTimeoutError(error: unknown): boolean {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const record = current as { name?: unknown; message?: unknown; cause?: unknown; code?: unknown };
+    if (record.name === 'AbortError' || record.name === 'TimeoutError') return true;
+    if (record.code === 'ABORT_ERR' || record.code === 20) return true;
+    if (typeof record.message === 'string' && /operation was aborted|request timed out|The user aborted/i.test(record.message)) {
+      return true;
+    }
+    current = record.cause;
+  }
+  return false;
+}
+
+export function quotaFailure(cause: unknown): Error {
+  return new Error(
+    'A cota diária do Gemini acabou (RESOURCE_EXHAUSTED). A chamada não será repetida. Espere a renovação ou use outra chave gratuita do AI Studio.',
+    cause === undefined ? undefined : { cause },
+  );
+}
+
+export function timeoutFailure(cause: unknown): Error {
+  return new Error('A chamada ao Gemini excedeu o tempo limite e foi cancelada.', cause === undefined ? undefined : { cause });
+}
+
+export function exhaustedFailure(status: 429 | 503, cause: unknown): Error {
+  const reason = status === 503 ? 'O Gemini está indisponível (503)' : `O Gemini retornou ${status}`;
+  return new Error(`${reason} depois de esgotar as tentativas. Tente de novo mais tarde.`, cause === undefined ? undefined : { cause });
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -78,12 +122,13 @@ export async function callWithRetry<T>(options: RetryOptions<T>): Promise<T> {
         return await options.run(model);
       } catch (error) {
         lastError = error;
+        if (isDailyQuotaError(error)) throw quotaFailure(error);
+        if (isTimeoutError(error)) throw timeoutFailure(error);
         const status = retryableStatus(error);
         const hasAnotherAttempt = attempt < attempts;
         const hasFallback = nextModel !== undefined;
-        if (!status || (!hasAnotherAttempt && !hasFallback)) {
-          throw error;
-        }
+        if (!status) throw error;
+        if (!hasAnotherAttempt && !hasFallback) throw exhaustedFailure(status, error);
         if (!hasAnotherAttempt) {
           options.onRetry?.({
             model,
@@ -134,6 +179,23 @@ function asStatusCode(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isInteger(value)) return value;
   if (typeof value === 'string' && /^\d{3}$/.test(value)) return Number(value);
   return undefined;
+}
+
+function errorBlob(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const record = current as { message?: unknown; status?: unknown; code?: unknown; cause?: unknown; error?: unknown };
+    if (typeof record.message === 'string') parts.push(record.message);
+    if (typeof record.status === 'string') parts.push(record.status);
+    if (typeof record.code === 'string') parts.push(record.code);
+    if (record.error && typeof record.error === 'object') parts.push(JSON.stringify(record.error));
+    current = record.cause;
+  }
+  if (error instanceof Error && parts.length === 0) parts.push(error.message);
+  return parts.join('\n');
 }
 
 function statusFromMessage(message: string): number | undefined {
