@@ -1,0 +1,53 @@
+{
+  "name": "agente-secretaria-gemini",
+  "version": "0.1.0",
+  "description": "Agente de IA secretaria (agenda e e-mail) em TypeScript com Gemini free tier, ReAct e MCP. Exemplo do curso Rocketseat Criação de Agentes de IA do Zero.",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "dev:mcp": "tsx src/mcp/agent.ts",
+    "auth": "tsx src/auth-cli.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start:mcp": "node dist/mcp/agent.js",
+    "start:mcp-server": "node dist/mcp/server.js",
+    "lint": "eslint .",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucasrmagalhaes/agente-secretaria-gemini.git"
+  },
+  "keywords": [
+    "gemini",
+    "react",
+    "mcp",
+    "google-calendar",
+    "secretaria"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lucasrmagalhaes/agente-secretaria-gemini/issues"
+  },
+  "homepage": "https://github.com/lucasrmagalhaes/agente-secretaria-gemini#readme",
+  "dependencies": {
+    "@google/genai": "^2.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "dotenv": "^18.0.9",
+    "googleapis": "^188.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.13.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.0"
+  }
+}
