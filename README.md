@@ -95,7 +95,9 @@ Não vincule um cartão. Calendar API e Gmail API funcionam no projeto pessoal d
 2. Crie uma chave de API. Não adicione forma de pagamento.
 3. Copie a chave para o `.env` (`GEMINI_API_KEY`).
 
-O modelo padrão é `gemini-2.5-flash`. Se o Google aposentar esse id, troque `GEMINI_MODEL` por outro Flash ainda listado como gratuito no AI Studio.
+O modelo padrão é `gemini-3.8-flash`. O id antigo `gemini-2.5-flash` responde 404 para contas novas. Se o Google aposentar o id atual, troque `GEMINI_MODEL` por outro Flash ainda listado como gratuito no AI Studio.
+
+Quando a API responde 429 ou 503 (alta demanda), a chamada é repetida algumas vezes, com espera de 1s, 2s e 4s. O terminal mostra cada nova tentativa. Se ainda falhar e `GEMINI_FALLBACK_MODEL` estiver definido, a mesma sequência roda nesse modelo reserva. Outros erros, como um modelo inexistente, param na hora.
 
 ## 2. Projeto Google Cloud sem billing
 
@@ -124,7 +126,8 @@ cp .env.example .env
 | Variável | Função |
 | --- | --- |
 | `GEMINI_API_KEY` | Chave gratuita do AI Studio. Obrigatória para o chat. |
-| `GEMINI_MODEL` | Modelo Flash. Padrão: `gemini-2.5-flash`. |
+| `GEMINI_MODEL` | Modelo Flash. Padrão: `gemini-3.8-flash`. |
+| `GEMINI_FALLBACK_MODEL` | Opcional. Modelo usado depois que o principal esgota as tentativas de 429 e 503. |
 | `GOOGLE_CREDENTIALS_PATH` | Caminho do JSON do cliente OAuth. |
 | `GOOGLE_TOKEN_PATH` | Onde `npm run auth` grava o token. Não commite. |
 | `GOOGLE_CALENDAR_ID` | Calendário. Padrão: `primary`. |
@@ -160,6 +163,12 @@ npm run dev:mcp
 ```
 
 Para encerrar, escreva `sair` ou use Ctrl+C.
+
+Também dá para mandar uma mensagem sem abrir o chat. O programa lê o stdin até o fim, responde e encerra. Se a chamada falhar, o erro sai no stderr e o processo termina com código de erro, em vez de ficar esperando outro prompt.
+
+```bash
+echo 'Que dia é hoje?' | npm run dev
+```
 
 Depois de `npm run build`:
 
@@ -244,7 +253,7 @@ Os testes cobrem o loop (resposta direta, uma chamada, chamadas encadeadas, vár
 
 ## Limites e segurança
 
-- A cota gratuita do Gemini é finita. Estoure o limite e a API devolve erro. Não cadastre cartão por causa disso.
+- A cota gratuita do Gemini é finita. Um 429 ou 503 dispara novas tentativas e, se você configurou, o modelo reserva. Se a cota acabar de vez, a chamada falha. Não cadastre cartão por causa disso.
 - O token e o JSON do cliente OAuth autorizam sua agenda. Não os commite e não os cole no chat.
 - `createEvent` e `updateEvent` não mandam convite do Calendar. O aviso a convidados é uma ação separada, e no dry-run ela só aparece no terminal.
 - O aplicativo OAuth fica em modo de teste, restrito aos usuários que você cadastrou.

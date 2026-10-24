@@ -8,7 +8,7 @@ import { createRuntimeTools } from './tools/build.js';
 import { createGeminiModel } from './agent/gemini.js';
 import { runReactLoop } from './agent/loop.js';
 import { SYSTEM_PROMPT } from './agent/prompt.js';
-import { runChat } from './agent/chat.js';
+import { ReportedChatError, runChat } from './agent/chat.js';
 import type { Content } from '@google/genai';
 import fs from 'node:fs';
 
@@ -34,6 +34,7 @@ async function main(): Promise<void> {
   const model = createGeminiModel({
     apiKey,
     model: config.model,
+    ...(config.fallbackModel ? { fallbackModel: config.fallbackModel } : {}),
     tools: tools.declarations(),
   });
   const contents: Content[] = [];
@@ -57,6 +58,13 @@ async function main(): Promise<void> {
   });
 }
 
+function reportFailure(error: unknown): void {
+  if (!(error instanceof ReportedChatError)) {
+    console.error(error instanceof Error ? error.message : error);
+  }
+  process.exit(1);
+}
+
 function warnIfCalendarMissing(credentialsPath: string | undefined, tokenPath: string | undefined): void {
   if (!credentialsPath || !tokenPath) {
     console.error('Aviso: defina GOOGLE_CREDENTIALS_PATH e GOOGLE_TOKEN_PATH para usar o Google Calendar.');
@@ -70,7 +78,6 @@ function warnIfCalendarMissing(credentialsPath: string | undefined, tokenPath: s
 const isEntry = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isEntry) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exit(1);
+    reportFailure(error);
   });
 }
