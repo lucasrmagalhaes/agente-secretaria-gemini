@@ -1,5 +1,5 @@
 import { google, type calendar_v3 } from 'googleapis';
-import { addDays, addMinutesWallClock, dayRangeIso, durationMinutes, formatDate, formatTime } from '../time.js';
+import { addDays, addMinutesWallClock, dateSpanIso, durationMinutes, formatDate, formatTime } from '../time.js';
 import type { OAuth2Client } from './auth.js';
 import type { CalendarEvent, CalendarGateway } from './calendar-gateway.js';
 
@@ -12,18 +12,19 @@ export function createGoogleCalendarGateway(
     async listEvents(input) {
       try {
         const calendar = google.calendar({ version: 'v3', auth: await getClient() });
-        const range = dayRangeIso(input.date, input.timeZone);
+        const range = dateSpanIso(input.startDate, input.endDate, input.timeZone);
         const response = await calendar.events.list({
           calendarId,
           timeMin: range.timeMin,
           timeMax: range.timeMax,
           singleEvents: true,
           orderBy: 'startTime',
-          maxResults: 50,
+          maxResults: 250,
         });
-        return (response.data.items ?? [])
+        const events = (response.data.items ?? [])
           .map((item) => mapEvent(item, input.timeZone))
           .filter((item): item is CalendarEvent => item !== null);
+        return { events, truncated: Boolean(response.data.nextPageToken) };
       } catch (error) {
         throw new Error(googleErrorMessage(error, 'Nao foi possivel listar os eventos.'), { cause: error });
       }

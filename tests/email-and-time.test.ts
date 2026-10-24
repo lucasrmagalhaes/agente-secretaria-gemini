@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DryRunEmailGateway } from '../src/email/gateway.js';
 import type { Logger } from '../src/log.js';
-import { addDays, addMinutesWallClock, dayRangeIso, formatDate, formatTime } from '../src/time.js';
+import { addDays, addMinutesWallClock, dateSpanIso, dayRangeIso, formatDate, formatTime, inclusiveDayCount } from '../src/time.js';
 
 test('converte o dia local de Sao Paulo para UTC', () => {
   const range = dayRangeIso('2026-05-01', 'America/Sao_Paulo');
@@ -10,6 +10,15 @@ test('converte o dia local de Sao Paulo para UTC', () => {
   assert.equal(range.timeMax, '2026-05-02T03:00:00.000Z');
   assert.equal(formatDate(new Date('2026-05-01T02:30:00.000Z'), 'America/Sao_Paulo'), '2026-04-30');
   assert.equal(formatTime(new Date('2026-05-01T02:30:00.000Z'), 'America/Sao_Paulo'), '23:30');
+});
+
+test('intervalo de sete dias inclui o ultimo dia e exclui a meia-noite seguinte', () => {
+  const range = dateSpanIso('2026-05-01', '2026-05-07', 'America/Sao_Paulo');
+  assert.equal(range.timeMin, '2026-05-01T03:00:00.000Z');
+  assert.equal(range.timeMax, '2026-05-08T03:00:00.000Z');
+  assert.equal(inclusiveDayCount('2026-05-01', '2026-05-07'), 7);
+  assert.equal(inclusiveDayCount('2026-05-01', '2026-05-31'), 31);
+  assert.equal(inclusiveDayCount('2026-05-01', '2026-06-01'), 32);
 });
 
 test('soma minutos no relogio de parede e atravessa o dia', () => {

@@ -44,10 +44,37 @@ export function addMinutesWallClock(date: string, time: string, minutes: number)
   return `${nextDate}T${hour}:${minute}:00`;
 }
 
-export function dayRangeIso(date: string, timeZone: string): { timeMin: string; timeMax: string } {
-  const start = zonedTimeToUtc(`${date}T00:00:00`, timeZone);
-  const end = zonedTimeToUtc(`${addDays(date, 1)}T00:00:00`, timeZone);
+/** Inclusive calendar dates. timeMax is the UTC instant of the next local midnight. */
+export function dateSpanIso(
+  startDate: string,
+  endDateInclusive: string,
+  timeZone: string,
+): { timeMin: string; timeMax: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDateInclusive)) {
+    throw new Error('Data invalida. Use AAAA-MM-DD.');
+  }
+  if (endDateInclusive < startDate) {
+    throw new Error('timeMax nao pode ser anterior a timeMin.');
+  }
+  const start = zonedTimeToUtc(`${startDate}T00:00:00`, timeZone);
+  const end = zonedTimeToUtc(`${addDays(endDateInclusive, 1)}T00:00:00`, timeZone);
   return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+}
+
+export function inclusiveDayCount(startDate: string, endDateInclusive: string): number {
+  const start = utcDate(startDate);
+  const end = utcDate(endDateInclusive);
+  return Math.round((end - start) / 86_400_000) + 1;
+}
+
+export function dayRangeIso(date: string, timeZone: string): { timeMin: string; timeMax: string } {
+  return dateSpanIso(date, date, timeZone);
+}
+
+function utcDate(date: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new Error('Data invalida. Use AAAA-MM-DD.');
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 export function zonedTimeToUtc(localDateTime: string, timeZone: string): Date {

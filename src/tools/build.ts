@@ -1,5 +1,5 @@
 import type { EmailMode } from '../config.js';
-import { formatDate, formatTime, formatWeekday } from '../time.js';
+import { formatDate, formatTime, formatWeekday, inclusiveDayCount } from '../time.js';
 import type { Logger } from '../log.js';
 import { DryRunEmailGateway, GmailGateway, type EmailGateway } from '../email/gateway.js';
 import type { CalendarGateway } from '../google/calendar-gateway.js';
@@ -30,7 +30,7 @@ export function buildToolRegistry(deps: ToolDeps): ToolRegistry {
     defineTool({
       name: 'getTodayDate',
       description:
-        'Retorna a data de hoje no formato AAAA-MM-DD, o horário e o dia da semana. Use antes de consultar ou marcar algo para hoje, amanhã ou outro dia relativo.',
+        'Retorna a data de hoje no formato AAAA-MM-DD, o horário e o dia da semana. Chame uma única vez antes de datas relativas. Para os próximos N dias, use esta data como timeMin de listEvents e calcule timeMax como hoje mais N-1 dias (sete dias contando hoje: se hoje é 2026-05-01, timeMax é 2026-05-07). Depois chame listEvents uma única vez.',
       schema: getTodayDateSchema,
       handler: async () => {
         const current = now();
@@ -45,11 +45,23 @@ export function buildToolRegistry(deps: ToolDeps): ToolRegistry {
     }),
     defineTool({
       name: 'listEvents',
-      description: 'Lista os eventos do Google Calendar em um dia. A data precisa estar no formato AAAA-MM-DD.',
+      description:
+        'Lista eventos do Google Calendar em um dia ou em um intervalo, numa única chamada. Para um dia, informe date (AAAA-MM-DD). Para vários dias, informe timeMin e timeMax (AAAA-MM-DD, ambos inclusive) e não informe date. Os próximos 7 dias a partir de 2026-05-01 usam timeMin 2026-05-01 e timeMax 2026-05-07. Não chame esta ferramenta uma vez por dia. O intervalo máximo é de 31 dias.',
       schema: listEventsSchema,
       handler: async (args) => {
-        const events = await deps.calendar.listEvents({ date: args.date, timeZone: deps.timeZone });
-        return { date: args.date, timeZone: deps.timeZone, events };
+        const range = resolveListRange(args);
+        const listed = await deps.calendar.listEvents({
+          startDate: range.startDate,
+          endDate: range.endDate,
+          timeZone: deps.timeZone,
+        });
+        return {
+          startDate: range.startDate,
+          endDate: range.endDate,
+          timeZone: deps.timeZone,
+          truncated: listed.truncated,
+          events: listed.events,
+        };
       },
     }),
     defineTool({
@@ -143,6 +155,36 @@ export function createRuntimeTools(options: {
     timeZone: options.config.timeZone,
     ...(options.now ? { now: options.now } : {}),
   });
+}
+
+const MAX_LIST_DAYS = 31;
+
+export function resolveListRange(args: {
+  date?: string;
+  timeMin?: string;
+  timeMax?: string;
+}): { startDate: string; endDate: string } {
+  const hasDate = args.date !== undefined;
+  const hasMin = args.timeMin !== undefined;
+  const hasMax = args.timeMax !== undefined;
+  if (hasDate && (hasMin || hasMax)) {
+    throw new Error('Use date para um dia, ou timeMin e timeMax para um intervalo. Não misture os dois.');
+  }
+  if (hasDate && args.date) {
+    return { startDate: args.date, endDate: args.date };
+  }
+  if (hasMin && hasMax && args.timeMin && args.timeMax) {
+    if (args.timeMax < args.timeMin) {
+      throw new Error('timeMax não pode ser anterior a timeMin.');
+    }
+    if (inclusiveDayCount(args.timeMin, args.timeMax) > MAX_LIST_DAYS) {
+      throw new Error('O intervalo pode ter no máximo 31 dias.');
+    }
+    return { startDate: args.timeMin, endDate: args.timeMax };
+  }
+  throw new Error(
+    'Informe date para um dia, ou timeMin e timeMax juntos para o intervalo. Para vários dias, faça uma única chamada.',
+  );
 }
 
 function defaultSubject(message: string): string {
