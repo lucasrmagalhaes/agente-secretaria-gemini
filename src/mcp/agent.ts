@@ -6,8 +6,8 @@ import { mcpToTool } from '@google/genai';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { loadConfig, requireGeminiApiKey } from '../config.js';
-import { runChat } from '../agent/chat.js';
-import { createGeminiClient } from '../agent/gemini.js';
+import { ReportedChatError, runChat } from '../agent/chat.js';
+import { createGeminiClient, generateContentWithRetry } from '../agent/gemini.js';
 import { recordModelTurn, textFromContent } from '../agent/messages.js';
 import { SYSTEM_PROMPT } from '../agent/prompt.js';
 
@@ -61,8 +61,9 @@ async function main(): Promise<void> {
     await runChat({
       contents,
       respond: async () => {
-        const response = await ai.models.generateContent({
+        const response = await generateContentWithRetry(ai, {
           model: config.model,
+          ...(config.fallbackModel ? { fallbackModel: config.fallbackModel } : {}),
           contents,
           config: {
             systemInstruction: SYSTEM_PROMPT,
@@ -88,7 +89,9 @@ async function main(): Promise<void> {
 const isEntry = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isEntry) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    if (!(error instanceof ReportedChatError)) {
+      console.error(error instanceof Error ? error.message : error);
+    }
     process.exit(1);
   });
 }

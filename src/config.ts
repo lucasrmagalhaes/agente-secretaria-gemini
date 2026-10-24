@@ -3,6 +3,7 @@ export type EmailMode = 'dry-run' | 'gmail';
 export interface AppConfig {
   geminiApiKey: string;
   model: string;
+  fallbackModel?: string;
   calendarId: string;
   timeZone: string;
   credentialsPath?: string;
@@ -30,7 +31,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   return {
     geminiApiKey: env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim() || '',
-    model: env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+    model: env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash',
+    fallbackModel: blankToUndefined(env.GEMINI_FALLBACK_MODEL),
     calendarId: env.GOOGLE_CALENDAR_ID?.trim() || 'primary',
     timeZone,
     credentialsPath: blankToUndefined(env.GOOGLE_CREDENTIALS_PATH),
